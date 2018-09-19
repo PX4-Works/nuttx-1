@@ -50,7 +50,15 @@
 /************************************************************************************
  * Public Symbols
  ************************************************************************************/
-
+	.bss
+	.global	g_mav_task_stack
+	.align	4
+g_check_on_exit:
+	.space  4
+g_mav_task_stack:
+	.space	1600
+g_end_mav_task_stack:
+	.text
 	.syntax	unified
 	.thumb
 	.file	"up_switchcontext.S"
@@ -77,19 +85,45 @@
  *
  ************************************************************************************/
 
+
 	.thumb_func
 	.globl	up_switchcontext
 	.type	up_switchcontext, function
+
 up_switchcontext:
 
 	/* Perform the System call with R0=1, R1=saveregs, R2=restoreregs */
+	ldr     r2, =g_mavlink_task
+	ldr     r2,[r2]
+	add		r2, #120
+	cmp     r0,r2 /*  is this the SAVE of the task ?*/
+	bne     4f
 
+	mov     r2,sp
+	push    {r0-r3}
+	mov 	r0,#400
+	ldr     r1, =g_mav_task_stack
+
+1:
+	ldr		r3,[r2], #4
+	str     r3,[r1], #4
+	sub		r0, #1
+	cmp		r0, #0
+	bne		1b
+
+	ldr     r2, =g_check_on_exit
+	str     r0,[r2]
+	pop     {r0-r3}
+	b       4f
+4:
 	mov		r2, r1					/* R2: restoreregs */
 	mov		r1, r0					/* R1: saveregs */
 	mov		r0, #SYS_switch_context	/* R0: context switch */
 	svc		0						/* Force synchronous SVCall (or Hard Fault) */
 
-	/* We will get here only after the rerturn from the context switch */
+	push    {r1}
+	mov     r1,r0
+	pop     {r1}
 
 	bx		lr
 	.size	up_switchcontext, .-up_switchcontext
