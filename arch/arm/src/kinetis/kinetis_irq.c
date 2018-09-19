@@ -427,9 +427,13 @@ void up_irqinitialize(void)
   irq_attach(KINETIS_IRQ_MEMFAULT, up_memfault, NULL);
 #endif
   irq_attach(KINETIS_IRQ_BUSFAULT, kinetis_busfault, NULL);
+  up_enable_irq(KINETIS_IRQ_BUSFAULT);
   irq_attach(KINETIS_IRQ_USAGEFAULT, kinetis_usagefault, NULL);
+  up_enable_irq(KINETIS_IRQ_USAGEFAULT);
   irq_attach(KINETIS_IRQ_PENDSV, kinetis_pendsv, NULL);
+  up_enable_irq(KINETIS_IRQ_PENDSV);
   irq_attach(KINETIS_IRQ_DBGMONITOR, kinetis_dbgmonitor, NULL);
+  up_enable_irq(KINETIS_IRQ_DBGMONITOR);
   irq_attach(KINETIS_IRQ_RESERVED, kinetis_reserved, NULL);
 #endif
 
