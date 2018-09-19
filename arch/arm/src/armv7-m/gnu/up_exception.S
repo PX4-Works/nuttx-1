@@ -82,7 +82,38 @@
 /************************************************************************************
  * Public Symbols
  ************************************************************************************/
+ 	.bss
+_CFSR:
+	.skip	4
 
+_HFSR:
+	.skip	4
+
+_DFSR:
+	.skip	4
+
+_MMAR:
+	.skip	4
+_BFAR:
+	.skip	4
+
+_AFSR:
+	.skip	4
+// HW stacked
+_HW_R14:
+	.skip	4
+_HW_R15:
+	.skip	4
+_HW_XPRS:
+	.skip	4
+
+// SW stacked
+_SW_R14:
+	.skip	4
+_SW_PSR:
+	.skip	4
+
+	.text
 	.globl		exception_common
 
 	.syntax		unified
@@ -121,6 +152,36 @@ exception_common:
 
 	mrs		r0, ipsr				/* R0=exception number */
 
+	cmp		r0,#3
+	bne		33f
+	push	{r0-r2}
+
+	ldr		r1, =#0xE000ED28
+	ldr     r0, =_CFSR
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _CFSR
+
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _HFSR
+
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _DFSR
+
+
+
+
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _MMAR
+
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _BFAR
+
+	ldr		r2,[r1],#4
+	str		r2,[r0],#4 // _AFSR
+	pop	{r0-r2}
+22:
+	b		22b
+33:
 	/* Complete the context save */
 
 	/* The EXC_RETURN value tells us whether the context is on the MSP or PSP */
@@ -217,6 +278,25 @@ exception_common:
 	cmp		r0, r1					/* Context switch? */
 	beq		2f						/* Branch if no context switch */
 
+	ldr     r2, =g_mavlink_task
+	ldr     r2,[r2]
+	add		r2, #120
+	cmp     r0,r2 /*  is this the SAVE of the task ?*/
+	bne     100f
+
+	ldr     r2, =_HW_R14
+	ldr		r1, [r0, #(4*REG_R14)] // HW STACKED
+	str		r1,[r2],#4 // _HW_R14
+	ldr		r1, [r0, #(4*REG_R15)]  // HW STACKED
+	str		r1,[r2],#4 // _HW_R15
+	ldr		r1, [r0, #(4*REG_XPSR)]  // HW STACKED
+	str		r1,[r2],#4 // _HW_XPS
+
+	ldr		r1, [r0, #(4*REG_EXC_RETURN)] // SW stacked
+	str		r1,[r2],#4 // _SW_R14
+	mrs		r1, psr
+	str		r1,[r2],#4 // _SW_PSR
+100:
 	/* We are returning with a pending context switch.  This case is different
 	 * because in this case, the register save structure does not lie on the
 	 * stack but, rather within a TCB structure.  We'll have to copy some
