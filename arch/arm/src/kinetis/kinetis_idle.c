@@ -99,7 +99,7 @@ void up_idle(void)
   /* Sleep until an interrupt occurs to save power */
 
   BEGIN_IDLE();
-  asm("WFI");
+//  asm("WFI");
   END_IDLE();
 #endif
 }
