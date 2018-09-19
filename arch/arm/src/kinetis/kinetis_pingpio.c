@@ -69,9 +69,6 @@ void kinetis_gpiowrite(uint32_t pinset, bool value)
   unsigned int port;
   unsigned int pin;
 
-  DEBUGASSERT((pinset & _PIN_MODE_MASK) == _PIN_MODE_GPIO);
-  DEBUGASSERT((pinset & _PIN_IO_MASK) == _PIN_OUTPUT);
-
   /* Get the port number and pin number */
 
   port = (pinset & _PIN_PORT_MASK) >> _PIN_PORT_SHIFT;
@@ -113,8 +110,6 @@ bool kinetis_gpioread(uint32_t pinset)
   unsigned int pin;
   bool         ret = false;
 
-  DEBUGASSERT((pinset & _PIN_MODE_MASK) == _PIN_MODE_GPIO);
-  DEBUGASSERT((pinset & _PIN_IO_MASK) == _PIN_INPUT);
 
   /* Get the port number and pin number */
 
