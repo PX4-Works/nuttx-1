@@ -54,7 +54,11 @@
 
 struct usbotg_bdtentry_s
 {
-  uint32_t status;  /* Status, byte count, and PID */
+  union
+  {
+    uint32_t status;  /* Status, byte count, and PID */
+    uint8_t  statusb[sizeof(uint32_t)];
+  };
   uint8_t *addr;    /* Buffer address */
 };
 #endif

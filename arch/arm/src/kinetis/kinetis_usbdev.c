@@ -907,7 +907,26 @@ static void khci_reqcomplete(struct khci_ep_s *privep, int16_t result)
 /****************************************************************************
  * Name: khci_epwrite
  ****************************************************************************/
+void khci_write_status(volatile struct usbotg_bdtentry_s *bdt, uint32_t status)
+{
+  union
+  {
+    uint32_t w;  /* Status, byte count, and PID */
+    uint8_t  b[sizeof(uint32_t)];
+  } ns;
 
+  ns.w = status;
+
+  if (status == 0) {
+      bdt->statusb[0] = 0;
+      bdt->status = 0;
+  } else {
+      bdt->statusb[3] = ns.b[3];
+      bdt->statusb[2] = ns.b[2];
+      bdt->statusb[1] = ns.b[1];
+      bdt->statusb[0] = ns.b[0];
+  }
+}
 static void khci_epwrite(struct khci_ep_s *privep,
                             volatile struct usbotg_bdtentry_s *bdt,
                             const uint8_t *src, uint32_t nbytes)
@@ -918,7 +937,7 @@ static void khci_epwrite(struct khci_ep_s *privep,
 
   /* Clear all bits in the status (assuring that we own the BDT) */
 
-  bdt->status = 0;
+  khci_write_status(bdt, 0);
 
   /* Get the correct data toggle (as well as other BDT bits) */
 
@@ -943,7 +962,7 @@ static void khci_epwrite(struct khci_ep_s *privep,
   bdtinfo("EP%d BDT IN [%p] {%08x, %08x}\n",
           USB_EPNO(privep->ep.eplog), bdt, status, bdt->addr);
 
-  bdt->status = status;
+  khci_write_status(bdt, status);
 }
 
 /****************************************************************************
@@ -992,7 +1011,7 @@ static void khci_wrcomplete(struct khci_usbdev_s *priv,
    */
 
   DEBUGASSERT((bdtin->status & USB_BDT_UOWN) == USB_BDT_COWN);
-  bdtin->status = 0;
+  khci_write_status(bdtin, 0);
   bdtin->addr   = 0;
 
   /* Toggle bdtin to the other BDT.  Is the current bdtin the EVEN bdt? */
@@ -1427,8 +1446,7 @@ static int khci_rdcomplete(struct khci_usbdev_s *priv,
    * UOWN bit.  If UOWN==0, then the transfer has been completed BUT it may not
    * yet have been processed.
    */
-
-  bdtout->status = 0;
+  khci_write_status(bdtout, 0);
   bdtout->addr   = 0;
 
   /* Toggle bdtout to the other BDT.  Is the current bdtout the EVEN bdt? */
@@ -1487,9 +1505,9 @@ static int khci_ep0rdsetup(struct khci_usbdev_s *priv, uint8_t *dest,
        * BDT is a sure indication
        */
 
-      bdtout->status   = 0;
+      khci_write_status(bdtout, 0);
       bdtout->addr     = 0;
-      otherbdt->status = 0;
+      khci_write_status(otherbdt, 0);
       otherbdt->addr   = 0;
 
       /* Reset the other BDT to zero... this will cause any attempted use
@@ -1551,7 +1569,7 @@ static int khci_ep0rdsetup(struct khci_usbdev_s *priv, uint8_t *dest,
   /* Then give the BDT to the USB */
 
   bdtinfo("EP0 BDT OUT [%p] {%08x, %08x}\n", bdtout, status, bdtout->addr);
-  bdtout->status = status;
+  khci_write_status(bdtout, status);
 
   priv->ctrlstate = CTRLSTATE_RDREQUEST;
   priv->rxbusy    = 1;
@@ -1626,7 +1644,7 @@ static int khci_rdsetup(struct khci_ep_s *privep, uint8_t *dest, int readlen)
    * else).
    */
 
-  bdtout->status = 0;
+  khci_write_status(bdtout, 0);
 
   /* Set the data pointer, data length, and enable the endpoint */
 
@@ -1654,7 +1672,7 @@ static int khci_rdsetup(struct khci_ep_s *privep, uint8_t *dest, int readlen)
   bdtinfo("EP%d BDT OUT [%p] {%08x, %08x}\n",
           epno, bdtout, status, bdtout->addr);
 
-  bdtout->status = status;
+  khci_write_status(bdtout, status);
   return OK;
 }
 
@@ -1887,7 +1905,7 @@ static void khci_ep0nextsetup(struct khci_usbdev_s *priv)
     {
       bytecount     = (USB_SIZEOF_CTRLREQ << USB_BDT_BYTECOUNT_SHIFT);
       bdt->addr     = (uint8_t *)&priv->ctrl;
-      bdt->status   = (USB_BDT_UOWN | bytecount);
+      khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
       priv->ep0done = 1;
     }
 }
@@ -1922,11 +1940,11 @@ static void khci_ep0rdcomplete(struct khci_usbdev_s *priv)
 
       bdt           = &g_bdt[EP0_OUT_EVEN];
       bdt->addr     = (uint8_t *)physaddr;
-      bdt->status   = (USB_BDT_UOWN | bytecount);
+      khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
 
       bdt           = &g_bdt[EP0_OUT_ODD];
       bdt->addr     = (uint8_t *)physaddr;
-      bdt->status   = (USB_BDT_UOWN | bytecount);
+      khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
 
       priv->ep0done = 1;
 
@@ -2491,7 +2509,7 @@ static void khci_ep0incomplete(struct khci_usbdev_s *priv)
 
   /* Make sure that we own the last BDT. */
 
-  bdtlast->status = 0;
+  khci_write_status(bdtlast, 0);
   bdtlast->addr   = 0;
 
   /* Are we processing the completion of one packet of an outgoing request
@@ -3179,22 +3197,22 @@ static void khci_ep0configure(struct khci_usbdev_s *priv)
 
   bdt         = &g_bdt[EP0_OUT_EVEN];
   bdt->addr   = (uint8_t *)&priv->ctrl;
-  bdt->status = (USB_BDT_UOWN | bytecount);
+  khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
   ep0->bdtout = bdt;
 
   bdt++;
-  bdt->status = (USB_BDT_UOWN | bytecount);
   bdt->addr   = (uint8_t *)&priv->ctrl;
+  khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
 
   /* Configure the IN BDTs. */
 
   bdt         = &g_bdt[EP0_IN_EVEN];
-  bdt->status = 0;
+  khci_write_status(bdt, 0);
   bdt->addr   = 0;
   ep0->bdtin  = bdt;
 
   bdt++;
-  bdt->status = 0;
+  khci_write_status(bdt, 0);
   bdt->addr   = 0;
 
   /* Data toggling is not used on SETUP transfers.  And IN transfer resulting
@@ -3289,7 +3307,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep,
 
       /* Mark that we own the entry */
 
-      bdt->status = 0;
+      khci_write_status(bdt, 0);
       bdt->addr   = 0;
 
       bdtinfo("EP%d BDT IN [%p] {%08x, %08x}\n",
@@ -3298,7 +3316,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep,
       /* Now do the same for the other buffer. */
 
       bdt++;
-      bdt->status = 0;
+      khci_write_status(bdt, 0);
       bdt->addr   = 0;
 
       bdtinfo("EP%d BDT IN [%p] {%08x, %08x}\n",
@@ -3313,7 +3331,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep,
 
       /* Mark that we own the entry */
 
-      bdt->status = 0;
+      khci_write_status(bdt, 0);
       bdt->addr   = 0;
 
       bdtinfo("EP%d BDT OUT [%p] {%08x, %08x}\n",
@@ -3322,7 +3340,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep,
       /* Now do the same for the other buffer. */
 
       bdt++;
-      bdt->status = 0;
+      khci_write_status(bdt, 0);
       bdt->addr   = 0;
 
       bdtinfo("EP%d BDT OUT [%p] {%08x, %08x}\n",
@@ -3659,12 +3677,12 @@ static int khci_epbdtstall(struct usbdev_ep_s *ep, bool resume, bool epin)
           /* Configure the other BDT to receive a SETUP command. */
 
           otherbdt->addr     = (uint8_t *)physaddr;
-          otherbdt->status   = (USB_BDT_UOWN | bytecount);
+          khci_write_status(otherbdt, (USB_BDT_UOWN | bytecount));
 
           /* Configure the current BDT to receive a SETUP command. */
 
           bdt->addr          = (uint8_t *)physaddr;
-          bdt->status        = (USB_BDT_UOWN | bytecount);
+          khci_write_status(bdt, (USB_BDT_UOWN | bytecount));
 
           bdtinfo("EP0 BDT IN [%p] {%08x, %08x}\n",
                   bdt, bdt->status, bdt->addr);
@@ -3675,13 +3693,13 @@ static int khci_epbdtstall(struct usbdev_ep_s *ep, bool resume, bool epin)
         {
           /* Return the other BDT to the CPU. */
 
+          khci_write_status(otherbdt, 0);
           otherbdt->addr   = 0;
-          otherbdt->status = 0;
 
           /* Return the current BDT to the CPU. */
 
+          khci_write_status(otherbdt, 0);
           bdt->addr        = 0;
-          bdt->status      = 0;
 
           bdtinfo("EP%d BDT %s [%p] {%08x, %08x}\n",
                   epno, epin ? "IN" : "OUT", bdt, bdt->status, bdt->addr);
@@ -3706,13 +3724,13 @@ static int khci_epbdtstall(struct usbdev_ep_s *ep, bool resume, bool epin)
 
       /* Stall the other BDT. */
 
-      otherbdt->status = (USB_BDT_UOWN | USB_BDT_BSTALL);
       otherbdt->addr   = 0;
+      khci_write_status(otherbdt, (USB_BDT_UOWN | USB_BDT_BSTALL));
 
       /* Stall the current BDT. */
 
-      bdt->status      = (USB_BDT_UOWN | USB_BDT_BSTALL);
       bdt->addr        = 0;
+      khci_write_status(bdt, (USB_BDT_UOWN | USB_BDT_BSTALL));
 
       /* Stop any queued requests.  Hmmm.. is there a race condition here? */
 
