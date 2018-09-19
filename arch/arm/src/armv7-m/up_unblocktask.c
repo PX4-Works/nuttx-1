@@ -67,16 +67,29 @@
  *     ready to run taks, executed.
  *
  ****************************************************************************/
+extern struct pthread_tcb_s * g_mavlink_task;
+#define MAV_SAVE 400
+uint32_t mav_stack_save[MAV_SAVE];
 
 void up_unblock_task(struct tcb_s *tcb)
 {
+  volatile uint32_t marker = 0;
+  UNUSED(marker);
   struct tcb_s *rtcb = this_task();
 
   /* Verify that the context switch can be performed */
 
   ASSERT((tcb->task_state >= FIRST_BLOCKED_STATE) &&
          (tcb->task_state <= LAST_BLOCKED_STATE));
-
+  if (rtcb == (struct tcb_s*) g_mavlink_task) {
+      volatile static int k = 0;
+      if(k > 0) {
+          k = k +2;
+      }
+      if(k <= 0) {
+          k = k +4;
+      }
+  }
   /* Remove the task from the blocked task list */
 
   sched_removeblocked(tcb);
@@ -102,6 +115,18 @@ void up_unblock_task(struct tcb_s *tcb)
           /* Yes, then we have to do things differently.
            * Just copy the CURRENT_REGS into the OLD rtcb.
            */
+          if (rtcb == (struct tcb_s*) g_mavlink_task) {
+              volatile static int k = 0;
+              if(k > 0) {
+                  k = k +2;
+              }
+              if(k <= 0) {
+                  k = k +4;
+              }
+              volatile uint32_t *ps = &marker;
+              for (k = 0; k < MAV_SAVE; k++ )
+                mav_stack_save[k] = ps[k];
+          }
 
           up_savestate(rtcb->xcp.regs);
 
@@ -117,6 +142,15 @@ void up_unblock_task(struct tcb_s *tcb)
 
           /* Then switch contexts */
 
+          if (rtcb == (struct tcb_s*) g_mavlink_task) {
+              volatile static int k = 0;
+              if(k > 0) {
+                  k = k +2;
+              }
+              if(k <= 0) {
+                  k = k +4;
+              }
+          }
           up_restorestate(rtcb->xcp.regs);
         }
 
@@ -125,6 +159,15 @@ void up_unblock_task(struct tcb_s *tcb)
       else
         {
           struct tcb_s *nexttcb = this_task();
+          if (nexttcb == (struct tcb_s*) g_mavlink_task) {
+              volatile static int k = 0;
+              if(k > 0) {
+                  k = k +2;
+              }
+              if(k <= 0) {
+                  k = k +4;
+              }
+          }
 
           /* Update scheduler parameters */
 
