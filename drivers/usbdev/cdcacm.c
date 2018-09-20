@@ -142,8 +142,12 @@ struct cdcacm_dev_s
 
   /* Serial I/O buffers */
 
+  char rx_guardb[4];
   char rxbuffer[CONFIG_CDCACM_RXBUFSIZE];
+  char rx_guarde[4];
+  char tx_guardb[4];
   char txbuffer[CONFIG_CDCACM_TXBUFSIZE];
+  char tx_guarde[4];
 };
 
 /* The internal version of the class driver */
@@ -296,6 +300,13 @@ static const struct uart_ops_s g_uartops =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+void set_guard(char *pg, const char *lab)
+{
+  *pg++= *lab++;
+  *pg++= *lab++;
+  *pg++= *lab++;
+  *pg++= *lab++;
+}
 
 /****************************************************************************
  * Name: cdcacm_fillrequest
@@ -790,6 +801,8 @@ static void cdcacm_rxtimeout(int argc, wdparm_t arg1, ...)
  *   Allocate a request instance along with its buffer
  *
  ****************************************************************************/
+volatile uint8_t * resq[20];
+volatile uint32_t reqi = 0;
 
 static struct usbdev_req_s *cdcacm_allocreq(FAR struct usbdev_ep_s *ep,
                                             uint16_t len)
@@ -800,12 +813,18 @@ static struct usbdev_req_s *cdcacm_allocreq(FAR struct usbdev_ep_s *ep,
   if (req != NULL)
     {
       req->len = len;
-      req->buf = EP_ALLOCBUFFER(ep, len);
+      req->buf = EP_ALLOCBUFFER(ep, len+8);
       if (req->buf == NULL)
         {
           EP_FREEREQ(ep, req);
           req = NULL;
         }
+      set_guard((char *)req->buf, "ep->");
+      set_guard((char *)req->buf+4+len, "<-ep");
+      resq[reqi++] = req->buf;
+      resq[reqi++] = req->buf + +4+len;
+      if (reqi == 20) PANIC();
+      req->buf = &req->buf[4];
     }
 
   return req;
@@ -826,6 +845,7 @@ static void cdcacm_freereq(FAR struct usbdev_ep_s *ep,
     {
       if (req->buf != NULL)
         {
+          req->buf = &req->buf[-4];
           EP_FREEBUFFER(ep, req->buf);
         }
 
@@ -2952,9 +2972,13 @@ int cdcacm_classobject(int minor, FAR struct usbdev_devinfo_s *devinfo,
   priv->serdev.disconnected = true;
 #endif
   priv->serdev.recv.size    = CONFIG_CDCACM_RXBUFSIZE;
+  set_guard(priv->rx_guardb, "rxg>");
   priv->serdev.recv.buffer  = priv->rxbuffer;
+  set_guard(priv->rx_guarde, "<rxg");
   priv->serdev.xmit.size    = CONFIG_CDCACM_TXBUFSIZE;
+  set_guard(priv->tx_guardb, "txg>");
   priv->serdev.xmit.buffer  = priv->txbuffer;
+  set_guard(priv->tx_guarde, "<txg");
   priv->serdev.ops          = &g_uartops;
   priv->serdev.priv         = priv;
 
