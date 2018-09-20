@@ -254,7 +254,8 @@ exception_common:
 	 * here prohibits nested interrupts without some additional logic!
 	 */
 
-	ldr		sp, =g_intstackbase
+	ldr		r2, =g_intstackbase
+	mov		sp, r2
 
 #else
 	/* Otherwise, we will re-use the interrupted thread's stack.  That may
